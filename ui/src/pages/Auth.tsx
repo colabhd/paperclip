@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
+// Colab[hd]: o botão de SSO só aparece se o servidor disser que há provedor.
+import { healthApi } from "../api/health";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
@@ -100,6 +102,8 @@ export function AuthPage() {
               ? "Use your email and password to access this instance."
               : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
+
+          <ColabhdSsoButton />
 
           <form
             className="mt-6 space-y-4"
@@ -205,6 +209,72 @@ export function AuthPage() {
       <div className="hidden md:block w-1/2 overflow-hidden">
         <AsciiArtAnimation />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Colab[hd] — entrada pelo SSO.
+ *
+ * Só renderiza quando `/api/health` anuncia um provedor: instância sem OIDC
+ * configurado fica idêntica ao upstream, sem botão morto.
+ *
+ * O endereço NÃO é `/sign-in/oauth2`. No `better-auth@1.7.0` o plugin
+ * `generic-oauth` não registra rota própria — ele inscreve o provedor na
+ * máquina social do núcleo, e a entrada é `POST /api/auth/sign-in/social`,
+ * com a volta em `/api/auth/callback/<providerId>`. Conferido no pacote
+ * instalado: "Providers are used through the standard `signIn.social` and
+ * `callback/:id` core endpoints — no plugin-specific endpoints needed."
+ */
+function ColabhdSsoButton() {
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: healthApi.get,
+    staleTime: 60_000,
+  });
+  const [entrando, setEntrando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const sso = health?.sso;
+  if (!sso) return null;
+
+  async function entrar() {
+    setEntrando(true);
+    setErro(null);
+    try {
+      const res = await fetch("/api/auth/sign-in/social", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: sso!.providerId, callbackURL: "/" }),
+      });
+      const payload = (await res.json().catch(() => null)) as { url?: string } | null;
+      if (!res.ok || !payload?.url) {
+        // A mensagem diz o que fazer, não o código: quem vê esta tela não
+        // tem como agir sobre um 502.
+        setErro("O provedor de identidade não respondeu. Tente de novo; se persistir, avise quem cuida do SSO.");
+        setEntrando(false);
+        return;
+      }
+      window.location.assign(payload.url);
+    } catch {
+      setErro("Não foi possível falar com o provedor de identidade.");
+      setEntrando(false);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <Button type="button" className="w-full" onClick={() => void entrar()} disabled={entrando}>
+        {entrando ? "Redirecionando…" : `Entrar com ${sso.displayName}`}
+      </Button>
+      {erro && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {erro}
+        </p>
+      )}
+      <p className="mt-3 text-center text-xs text-muted-foreground">
+        ou use e-mail e senha
+      </p>
     </div>
   );
 }

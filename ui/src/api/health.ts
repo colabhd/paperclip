@@ -29,6 +29,8 @@ export type HealthStatus = {
   deploymentExposure?: "private" | "public";
   authReady?: boolean;
   bootstrapStatus?: "ready" | "bootstrap_pending";
+  /** Colab[hd]: presente só quando há provedor de SSO configurado. */
+  sso?: { providerId: string; displayName: string };
   bootstrapInviteActive?: boolean;
   features?: {
     companyDeletionEnabled?: boolean;

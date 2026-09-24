@@ -16,6 +16,8 @@ import {
   workspaceLoginHandoffPlugin,
   type WorkspaceHandoffExpectedIdentity,
 } from "./workspace-login-handoff-plugin.js";
+// Colab[hd]: SSO por OIDC. Arquivo novo, ver colabhd-oidc.ts.
+import { colabhdOidcPlugin, resolveColabhdOidcSettings } from "./colabhd-oidc.js";
 import {
   normalizeWorkspaceHandoffOrigin,
   resolveWorkspaceHandoffLocalCompanyId,
@@ -200,6 +202,34 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  // ── Colab[hd]: os plugins, montados antes da configuração ──────────────
+  //
+  // O do upstream entra sob a MESMA condição de antes. O nosso entra só com as
+  // três variáveis de OIDC presentes, e sem elas o app sobe idêntico ao
+  // upstream — é o que mantém esta árvore testável contra o comportamento dele.
+  const betterAuthPlugins: NonNullable<Parameters<typeof betterAuth>[0]["plugins"]> = [];
+
+  if (resolveWorkspaceHandoffIdentity(config)) {
+    betterAuthPlugins.push(
+      workspaceLoginHandoffPlugin({
+        db,
+        // Re-resolved per exchange so a hot restart cannot keep validating
+        // against an origin the control plane has since republished.
+        resolveExpectedIdentity: () =>
+          resolveWorkspaceHandoffIdentity(config) ?? {
+            key: null,
+            instanceId: null,
+            executionWorkspaceId: null,
+            companyId: null,
+            origin: null,
+          },
+      }),
+    );
+  }
+
+  const colabhdOidc = resolveColabhdOidcSettings();
+  if (colabhdOidc) betterAuthPlugins.push(colabhdOidcPlugin(colabhdOidc));
+
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -227,25 +257,10 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     // Registered only for a managed workspace instance: the plugin is what makes
     // `Open workspace` password-independent, and a control-plane instance that
     // was never handed a workspace key must not expose the exchange at all.
-    ...(resolveWorkspaceHandoffIdentity(config)
-      ? {
-          plugins: [
-            workspaceLoginHandoffPlugin({
-              db,
-              // Re-resolved per exchange so a hot restart cannot keep validating
-              // against an origin the control plane has since republished.
-              resolveExpectedIdentity: () =>
-                resolveWorkspaceHandoffIdentity(config) ?? {
-                  key: null,
-                  instanceId: null,
-                  executionWorkspaceId: null,
-                  companyId: null,
-                  origin: null,
-                },
-            }),
-          ],
-        }
-      : {}),
+    // Colab[hd]: era um spread condicional com UM plugin; virou array para
+    // caber o segundo sem mexer na condição do primeiro. A do upstream
+    // continua valendo palavra por palavra.
+    ...(betterAuthPlugins.length > 0 ? { plugins: betterAuthPlugins } : {}),
   };
 
   if (!baseUrl) {

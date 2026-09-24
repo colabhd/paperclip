@@ -28,6 +28,8 @@ import {
   WORKSPACE_READINESS_USER_ID_HEADER,
 } from "../auth/workspace-login-handoff.js";
 import { serverVersion } from "../version.js";
+// Colab[hd]: a tela de login precisa saber se existe provedor de SSO.
+import { resolveColabhdOidcSettings } from "../auth/colabhd-oidc.js";
 
 function shouldExposeFullHealthDetails(
   actorType: "none" | "board" | "agent" | null | undefined,
@@ -297,6 +299,13 @@ export function healthRoutes(
       : undefined;
     const warnings = databaseBackup?.warnings.length ? databaseBackup.warnings : undefined;
 
+    // Colab[hd]: só o identificador e o rótulo. Nem segredo, nem emissor —
+    // a tela precisa saber QUE existe provedor e como chamá-lo, mais nada.
+    const colabhdOidc = resolveColabhdOidcSettings();
+    const sso = colabhdOidc
+      ? { providerId: colabhdOidc.providerId, displayName: colabhdOidc.displayName }
+      : undefined;
+
     if (!exposeFullDetails) {
       const redactedDatabaseBackup = databaseBackup ? redactedDatabaseBackupHealth(databaseBackup) : undefined;
       const redactedWarnings = redactedDatabaseBackup?.warnings.length ? redactedDatabaseBackup.warnings : undefined;
@@ -307,6 +316,8 @@ export function healthRoutes(
         commit,
         bootstrapStatus,
         bootstrapInviteActive,
+      ...(sso ? { sso } : {}),
+        ...(sso ? { sso } : {}),
         ...(redactedDatabaseBackup ? { databaseBackup: redactedDatabaseBackup } : {}),
         ...(redactedWarnings ? { warnings: redactedWarnings } : {}),
         ...(devServer ? { devServer } : {}),
