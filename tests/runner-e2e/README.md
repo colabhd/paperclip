@@ -1009,7 +1009,9 @@ automatically, and the notice lives outside `#root`, so it cannot satisfy an
 app-readiness assertion. The saved-task regression interrupts the built bundle,
 clicks retry, and verifies the original task, persisted comment, and composer.
 `pnpm test:e2e:runner:browser-support` also tests failed and stalled imports,
-evaluation errors, service-worker-controlled retry, and cleanup after startup.
+evaluation errors, service-worker-controlled retry, repeated offline retries, and
+cleanup after startup. The worker returns a static, uncached HTML retry screen
+when a navigation fails offline; it never embeds or caches task content.
 
 These fault-injection tests prove recovery from interrupted startup. They do not
 establish the cause of the historical intermittent Vite module-graph stall;

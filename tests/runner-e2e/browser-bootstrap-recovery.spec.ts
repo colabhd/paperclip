@@ -76,6 +76,32 @@ test.describe("browser bootstrap recovery", () => {
     });
   }
 
+  test("offline retries keep a recovery action until the connection returns", async ({ page, context }) => {
+    await page.goto(`${baseURL}/tasks/reload`);
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    });
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+    mode = "failed";
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Paperclip couldn’t start" })).toBeVisible();
+    await context.setOffline(true);
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await page.getByRole("button", { name: "Reload page" }).click();
+        await expect(page.getByRole("heading", { name: "Paperclip is offline" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible();
+      }
+    } finally {
+      await context.setOffline(false);
+    }
+    mode = "ready";
+    await page.getByRole("button", { name: "Reload page" }).click();
+    await expect(page.getByRole("main")).toHaveText("Task ready");
+    await expect(page).toHaveURL(`${baseURL}/tasks/reload`);
+  });
+
   test("a stalled import shows recovery and dismisses it when startup eventually succeeds", async ({ page }) => {
     mode = "pending";
     await page.clock.install();
