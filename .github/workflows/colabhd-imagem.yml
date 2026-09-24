@@ -1,0 +1,99 @@
+# ===========================================================================
+# Imagem do Colab[hd] — Paperclip com entrada por OIDC
+# ===========================================================================
+#
+# POR QUE ESTE ARQUIVO EXISTE, E POR QUE NÃO USAMOS O `docker.yml` DO UPSTREAM
+#
+# O do upstream publica no registro dele, roda em `ubuntu-latest` e constrói
+# para duas arquiteturas. Nada disso serve aqui: publicamos no nosso registro,
+# a cota de minutos do GitHub está esgotada na organização, e o parque é
+# `linux/amd64` inteiro — construir `arm64` seria dobrar o tempo por nada.
+#
+# Os workflows herdados do upstream NÃO foram apagados, de propósito: apagá-los
+# encheria de ruído todo merge futuro com o upstream, que é o custo que o fork
+# já cobra. Eles simplesmente não rodam aqui.
+#
+# RUNNER DA CASA
+#
+# `colabhd-franca` é o conjunto ARC instalado na ORGANIZAÇÃO (`apps/arc/` no
+# repositório devops), então alcança este repositório também. Ele não consome a
+# cota de minutos do GitHub — que é o que permite este build existir hoje.
+name: imagem
+
+on:
+  push:
+    branches: [colabhd/sso]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  imagem:
+    runs-on: colabhd-franca
+    steps:
+      - uses: actions/checkout@v4
+
+      # A imagem do ARC traz git, curl, jq, sudo e docker com buildx, e NÃO
+      # traz node nem pnpm no PATH do `run:`. A ação abaixo resolve o node; o
+      # pnpm vem pelo corepack, que o repositório já fixa em `packageManager`.
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          # 24, não 22: o `engines` do upstream exige >=24.11.0 e há um
+          # `check:node-version` que reprova fora disso.
+          node-version: 24
+
+      - name: Habilitar o pnpm
+        run: corepack enable
+
+      # O COMPILADOR É O PORTÃO, e roda ANTES do build da imagem: um erro de
+      # tipo na extensão precisa reprovar em segundos, não depois de dez
+      # minutos empacotando uma imagem que não serve.
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Conferir os tipos
+        # O script da RAIZ, não `pnpm -r typecheck` direto: a raiz roda um
+        # `preflight:workspace-links` antes, e pular isso deixa passar erro
+        # de ligação entre pacotes do monorepo.
+        run: pnpm typecheck
+
+      - name: Entrar no registro
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # A etiqueta carrega a versão do upstream de onde saímos, mais o commit
+      # desta árvore: `2026.831.1-colabhd.<sha>`. Sem isso, "qual upstream esta
+      # imagem estende?" vira arqueologia de git — e é a primeira pergunta de
+      # quem for subir de versão.
+      - name: Montar a etiqueta
+        id: etiqueta
+        run: |
+          set -euo pipefail
+          base="$(git describe --tags --abbrev=0 2>/dev/null || echo desconhecida)"
+          base="${base#v}"
+          echo "tag=ghcr.io/colabhd/paperclip:${base}-colabhd.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "movel=ghcr.io/colabhd/paperclip:sso" >> "$GITHUB_OUTPUT"
+
+      - name: Construir e publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # Só amd64: é o que o parque roda.
+          platforms: linux/amd64
+          tags: |
+            ${{ steps.etiqueta.outputs.tag }}
+            ${{ steps.etiqueta.outputs.movel }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Dizer o que foi publicado
+        run: echo "${{ steps.etiqueta.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
