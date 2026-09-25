@@ -249,11 +249,46 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
         verification: authVerifications,
       },
     }),
+    // ── Colab[hd]: com OIDC configurado, a senha local SAI ─────────────────
+    //
+    // Sem isto o fork seria uma porta A MAIS, e não a única: o formulário de
+    // e-mail/senha continuaria de pé atrás do porteiro, e "Create account"
+    // junto. O objetivo aqui é que o Authentik responda por QUEM ENTRA, e uma
+    // segunda credencial, emitida e guardada pelo próprio app, contradiz isso.
+    //
+    // Sem as variáveis de OIDC nada muda: a condição devolve o upstream.
     emailAndPassword: {
-      enabled: true,
+      enabled: !colabhdOidc,
       requireEmailVerification: false,
-      disableSignUp: config.authDisableSignUp,
+      disableSignUp: colabhdOidc ? true : config.authDisableSignUp,
     },
+    // ── Colab[hd]: o vínculo com a conta que JÁ EXISTE ─────────────────────
+    //
+    // `requireLocalEmailVerified` é `true` por padrão no better-auth@1.7.0
+    // (`dist/oauth2/link-account.mjs`, na condição que decide vincular). A
+    // conta criada pelo `auth bootstrap-ceo` nasce com `email_verified =
+    // false`, porque o bootstrap roda com `requireEmailVerification: false`.
+    //
+    // Medido no banco desta instância antes de escrever isto: a ÚNICA linha de
+    // `user`, a que carrega `instance_admin`, está com `email_verified = f`.
+    // Com o padrão de pé, o primeiro login por SSO não cria conta duplicada --
+    // ele devolve `account not linked` e morre ali, sem administrador.
+    //
+    // Por isso duas afirmações, não uma: o provedor é confiável (é o nosso
+    // IdP) e o carimbo local de verificação não arbitra o vínculo. Quem
+    // verifica o e-mail é o Authentik, e ele já disse que sim -- o mapeamento
+    // próprio de `email` existe exatamente para isso.
+    ...(colabhdOidc
+      ? {
+          account: {
+            accountLinking: {
+              enabled: true,
+              trustedProviders: [colabhdOidc.providerId],
+              requireLocalEmailVerified: false,
+            },
+          },
+        }
+      : {}),
     rateLimit: buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,
       deploymentExposure: config.deploymentExposure,

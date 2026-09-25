@@ -74,6 +74,10 @@ export function AuthPage() {
     password.trim().length > 0 &&
     (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
 
+  // Colab[hd]: incondicional e antes de qualquer `return`, senao quebra a
+  // ordem dos hooks quando a sessao termina de carregar.
+  const colabhdSso = useColabhdSso();
+
   if (isSessionLoading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -95,16 +99,23 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
+            {colabhdSso
+              ? "Entrar no Paperclip"
+              : mode === "sign_in"
+                ? "Sign in to Paperclip"
+                : "Create your Paperclip account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+            {colabhdSso
+              ? "O acesso a esta instancia e pelo SSO do Colab[hd]. Nao ha senha local."
+              : mode === "sign_in"
+                ? "Use your email and password to access this instance."
+                : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
 
           <ColabhdSsoButton />
 
+          {!colabhdSso && (
           <form
             className="mt-6 space-y-4"
             method="post"
@@ -188,7 +199,11 @@ export function AuthPage() {
                   : "Create Account"}
             </Button>
           </form>
+          )}
 
+          {/* Colab[hd]: o convite para criar conta so faz sentido onde criar
+              conta e possivel. Com OIDC, quem cria pessoa e o Authentik. */}
+          {!colabhdSso && (
           <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
             <button
@@ -202,6 +217,7 @@ export function AuthPage() {
               {mode === "sign_in" ? "Create one" : "Sign in"}
             </button>
           </div>
+          )}
         </div>
       </div>
 
@@ -226,15 +242,19 @@ export function AuthPage() {
  * instalado: "Providers are used through the standard `signIn.social` and
  * `callback/:id` core endpoints — no plugin-specific endpoints needed."
  */
-function ColabhdSsoButton() {
+function useColabhdSso() {
   const { data: health } = useQuery({
     queryKey: queryKeys.health,
     queryFn: healthApi.get,
     staleTime: 60_000,
   });
+  return health?.sso ?? null;
+}
+
+function ColabhdSsoButton() {
+  const sso = useColabhdSso();
   const [entrando, setEntrando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const sso = health?.sso;
   if (!sso) return null;
 
   async function entrar() {
@@ -272,9 +292,6 @@ function ColabhdSsoButton() {
           {erro}
         </p>
       )}
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        ou use e-mail e senha
-      </p>
     </div>
   );
 }
