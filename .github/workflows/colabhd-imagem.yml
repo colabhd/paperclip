@@ -54,23 +54,26 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
-      # RUST, e não é opcional: medido em dois builds seguidos. O `typecheck`
-      # do `server` chama `prepare:runner-vendor`, que constrói o
-      # `paperclip-runner`, cuja cadeia termina em `cargo`. Não é o `-r` da
-      # raiz varrendo pacote alheio — é dependência do pacote que mudamos, e
-      # filtrar não escapa dela. Sem isto o portão reprova sempre, por falta de
-      # ferramenta, e passaria a ser ignorado — que é pior do que não existir.
-      - name: Preparar o Rust
-        run: |
-          set -euo pipefail
-          curl -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable --component rustfmt
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # O PORTÃO CONFERE O NOSSO TYPESCRIPT, e só.
+      #
+      # `pnpm --filter ./server typecheck` não serve, e três builds mostraram
+      # por quê: o script do upstream é
+      # `prepare:runner-vendor && … && tsc --noEmit`, e o vendor constrói o
+      # `paperclip-runner`, cuja cadeia é cargo → cc. A imagem do ARC não tem
+      # nem um nem outro, então o portão reprovava por ferramenta ausente,
+      # sem nunca olhar uma linha nossa. Instalar Rust e um compilador C a cada
+      # execução seria pagar minutos para recompilar algo que este fork não
+      # altera — e um portão que reprova sempre vira portão ignorado.
+      #
+      # `tsc --noEmit` direto confere exatamente o que mudamos. Se um dia a
+      # extensão passar a depender de tipo gerado pelo vendor, isto falha
+      # dizendo qual módulo falta — que é um erro legível, não "cc not found".
+      - name: Conferir os tipos do servidor
+        working-directory: server
+        run: pnpm exec tsc --noEmit
 
-      - name: Conferir os tipos
-        # Mirado nos dois pacotes que a extensão toca. O `pnpm typecheck` da
-        # raiz varreria o monorepo inteiro sem olhar melhor o que mudamos.
-        run: pnpm --filter ./server --filter ./ui typecheck
+      - name: Conferir os tipos do UI
+        run: pnpm --filter ./ui typecheck
 
       - name: Entrar no registro
         uses: docker/login-action@v3
