@@ -113,7 +113,10 @@ export function AuthPage() {
                 : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
 
-          <ColabhdSsoButton />
+          {/* Colab[hd]: `nextPath`, e nao a raiz. O caminho de senha ja
+              honrava o `?next=` e o convite lembrado; o botao tinha de
+              honrar tambem, senao entrar pelo SSO perde o destino. */}
+          <ColabhdSsoButton callbackURL={nextPath} />
 
           {!colabhdSso && (
           <form

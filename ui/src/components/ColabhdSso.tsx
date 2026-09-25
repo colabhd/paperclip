@@ -44,6 +44,10 @@ export function ColabhdSsoButton({ callbackURL = "/" }: { callbackURL?: string }
   const [erro, setErro] = useState<string | null>(null);
   if (!sso) return null;
 
+  // Depois da guarda acima, e para que `entrar` nao precise de `sso!`: a
+  // assercao nao-nula calaria o compilador sem provar nada.
+  const { providerId } = sso;
+
   async function entrar() {
     setEntrando(true);
     setErro(null);
@@ -52,7 +56,7 @@ export function ColabhdSsoButton({ callbackURL = "/" }: { callbackURL?: string }
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: sso!.providerId, callbackURL }),
+        body: JSON.stringify({ provider: providerId, callbackURL }),
       });
       const payload = (await res.json().catch(() => null)) as { url?: string } | null;
       if (!res.ok || !payload?.url) {

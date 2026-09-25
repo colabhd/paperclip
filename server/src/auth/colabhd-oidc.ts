@@ -6,18 +6,25 @@
  * A diretriz de IAM da casa é "SSO nas aplicações, não base de usuário por
  * app": a prestação de contas depende de trilha por pessoa, e login por
  * aplicação faz o registro apontar para uma conta em vez de alguém. O
- * Paperclip só tem login próprio (Better Auth, e-mail e senha), então quem
- * entra atravessa duas portas — o provedor de identidade e a do app — e a
- * segunda cria um cadastro paralelo.
+ * upstream só tem login próprio (Better Auth, e-mail e senha), o que dava a
+ * cada pessoa duas identidades.
  *
- * O QUE ESTE ARQUIVO FAZ, E O QUE ELE NÃO FAZ
+ * O QUE ESTE ARQUIVO FAZ
  *
  * Liga o plugin `genericOAuth`, que já vem no `better-auth@1.7.0` instalado —
- * nenhuma dependência nova. Ele acrescenta um provedor; NÃO desliga o login
- * por e-mail e senha, que segue disponível e é o caminho de recuperação se o
- * provedor de identidade cair. Fechar essa porta é decisão de implantação,
- * pela variável `PAPERCLIP_AUTH_DISABLE_SIGN_UP` e pela política do provedor,
- * não desta extensão.
+ * nenhuma dependência nova.
+ *
+ * NÃO HÁ CAMINHO DE RECUPERAÇÃO POR SENHA, E ISSO É DELIBERADO
+ *
+ * Quando `resolveColabhdOidcSettings()` devolve configuração, o
+ * `better-auth.ts` DESLIGA `emailAndPassword` — o formulário e o "Create
+ * account" somem das duas telas. Uma segunda credencial, emitida e guardada
+ * pelo próprio app, contradiz "o Authentik responde por quem entra".
+ *
+ * Em consequência: `PAPERCLIP_AUTH_DISABLE_SIGN_UP` deixa de ter efeito com
+ * OIDC ligado, e **o caminho de volta é tirar uma das três variáveis do
+ * Secret e reiniciar o pod** — não há senha para onde cair. Está no
+ * `apps/paperclip/README.md` do repositório devops.
  *
  * FALHA FECHADA
  *
