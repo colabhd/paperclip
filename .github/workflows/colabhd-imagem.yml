@@ -55,10 +55,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Conferir os tipos
-        # O script da RAIZ, não `pnpm -r typecheck` direto: a raiz roda um
-        # `preflight:workspace-links` antes, e pular isso deixa passar erro
-        # de ligação entre pacotes do monorepo.
-        run: pnpm typecheck
+        # MIRADO nos dois pacotes que a extensão toca, e não `pnpm typecheck`
+        # da raiz — medido no primeiro build: o `-r` da raiz aborta em
+        # `packages/paperclip-runner`, cujo typecheck inclui um passo em Rust
+        # (`cargo fmt`/`cargo check`), e a imagem do ARC não traz `cargo`.
+        # A corrida morria ali, ANTES de chegar ao servidor e ao UI — ou seja,
+        # o portão existia e não olhava o que a gente mudou.
+        #
+        # Instalar Rust no runner resolveria o sintoma pagando minutos em toda
+        # execução para compilar algo que este fork não altera.
+        run: pnpm --filter ./server --filter ./ui typecheck
 
       - name: Entrar no registro
         uses: docker/login-action@v3
