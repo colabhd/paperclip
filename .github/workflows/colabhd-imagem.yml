@@ -54,16 +54,22 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
+      # RUST, e não é opcional: medido em dois builds seguidos. O `typecheck`
+      # do `server` chama `prepare:runner-vendor`, que constrói o
+      # `paperclip-runner`, cuja cadeia termina em `cargo`. Não é o `-r` da
+      # raiz varrendo pacote alheio — é dependência do pacote que mudamos, e
+      # filtrar não escapa dela. Sem isto o portão reprova sempre, por falta de
+      # ferramenta, e passaria a ser ignorado — que é pior do que não existir.
+      - name: Preparar o Rust
+        run: |
+          set -euo pipefail
+          curl -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain stable --component rustfmt
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Conferir os tipos
-        # MIRADO nos dois pacotes que a extensão toca, e não `pnpm typecheck`
-        # da raiz — medido no primeiro build: o `-r` da raiz aborta em
-        # `packages/paperclip-runner`, cujo typecheck inclui um passo em Rust
-        # (`cargo fmt`/`cargo check`), e a imagem do ARC não traz `cargo`.
-        # A corrida morria ali, ANTES de chegar ao servidor e ao UI — ou seja,
-        # o portão existia e não olhava o que a gente mudou.
-        #
-        # Instalar Rust no runner resolveria o sintoma pagando minutos em toda
-        # execução para compilar algo que este fork não altera.
+        # Mirado nos dois pacotes que a extensão toca. O `pnpm typecheck` da
+        # raiz varreria o monorepo inteiro sem olhar melhor o que mudamos.
         run: pnpm --filter ./server --filter ./ui typecheck
 
       - name: Entrar no registro
