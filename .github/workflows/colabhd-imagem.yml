@@ -33,7 +33,14 @@ jobs:
   imagem:
     runs-on: colabhd-franca
     steps:
+      # `fetch-depth: 0` porque a etiqueta depende de `git describe --tags`, e o
+      # padrão do checkout é clone RASO e SEM TAGS. Com o padrão, o describe
+      # falha, o fallback devolve "desconhecida" e a imagem sai etiquetada
+      # `desconhecida-colabhd.<sha>` -- publicada, verde, e incapaz de responder
+      # a única pergunta para a qual a etiqueta existe.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # A imagem do ARC traz git, curl, jq, sudo e docker com buildx, e NÃO
       # traz node nem pnpm no PATH do `run:`. A ação abaixo resolve o node; o
@@ -99,8 +106,15 @@ jobs:
         id: etiqueta
         run: |
           set -euo pipefail
-          base="$(git describe --tags --abbrev=0 2>/dev/null || echo desconhecida)"
+          # SEM `|| echo desconhecida`: etiqueta que não diz de que upstream a
+          # imagem saiu é pior que build vermelho, porque não avisa. Se o
+          # describe falhar, o build para aqui.
+          base="$(git describe --tags --abbrev=0)"
           base="${base#v}"
+          case "$base" in
+            [0-9]*) ;;
+            *) echo "etiqueta base inesperada: '$base'" >&2; exit 1 ;;
+          esac
           echo "tag=ghcr.io/colabhd/paperclip:${base}-colabhd.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "movel=ghcr.io/colabhd/paperclip:sso" >> "$GITHUB_OUTPUT"
 
