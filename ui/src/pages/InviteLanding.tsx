@@ -10,6 +10,8 @@ import { accessApi } from "../api/access";
 import { authApi } from "../api/auth";
 import { fetchCompanyListForCurrentAccount, useCompanyListQuery } from "../api/companies-query";
 import { healthApi } from "../api/health";
+// Colab[hd]: a extensao de SSO mora em arquivo nosso; aqui so o enxerto.
+import { ColabhdSsoButton, useColabhdSso } from "@/components/ColabhdSso";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 import { clearPendingInviteToken, rememberPendingInviteToken } from "../lib/invite-memory";
 import { queryKeys } from "../lib/queryKeys";
@@ -208,6 +210,7 @@ export function InviteLandingPage() {
   const params = useParams();
   const token = (params.token ?? "").trim();
   const [authMode, setAuthMode] = useState<AuthMode>("sign_up");
+  const colabhdSso = useColabhdSso();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -659,6 +662,28 @@ export function InviteLandingPage() {
                 </Button>
               </div>
             ) : requiresHumanAccount ? (
+              // Colab[hd]: com OIDC nao ha conta local para criar nem senha
+              // para digitar. A volta e o PROPRIO convite: quem entrou para
+              // aceitar um convite e cai na raiz precisa achar o link de novo,
+              // e o convite chega por fora do app.
+              colabhdSso ? (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-lg font-semibold">Entrar para aceitar o convite</h2>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      O acesso e pelo SSO do Colab[hd]. Depois de entrar, voce volta
+                      para ca e o convite para {companyDisplayName} e aceito.
+                    </p>
+                  </div>
+                  <ColabhdSsoButton
+                    callbackURL={
+                      typeof window === "undefined"
+                        ? "/"
+                        : `${window.location.pathname}${window.location.search}`
+                    }
+                  />
+                </div>
+              ) : (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold">
@@ -808,6 +833,7 @@ export function InviteLandingPage() {
                     : "No account yet? Switch back to create account so you can accept the invite with a new login."}
                 </p>
               </div>
+              )
             ) : (
               <div className="space-y-4">
                 <div>
