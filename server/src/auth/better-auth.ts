@@ -207,28 +207,34 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
   // O do upstream entra sob a MESMA condição de antes. O nosso entra só com as
   // três variáveis de OIDC presentes, e sem elas o app sobe idêntico ao
   // upstream — é o que mantém esta árvore testável contra o comportamento dele.
-  const betterAuthPlugins: NonNullable<Parameters<typeof betterAuth>[0]["plugins"]> = [];
-
-  if (resolveWorkspaceHandoffIdentity(config)) {
-    betterAuthPlugins.push(
-      workspaceLoginHandoffPlugin({
-        db,
-        // Re-resolved per exchange so a hot restart cannot keep validating
-        // against an origin the control plane has since republished.
-        resolveExpectedIdentity: () =>
-          resolveWorkspaceHandoffIdentity(config) ?? {
-            key: null,
-            instanceId: null,
-            executionWorkspaceId: null,
-            companyId: null,
-            origin: null,
-          },
-      }),
-    );
-  }
-
+  //
+  // SEM ANOTAÇÃO DE TIPO, e isso é deliberado: anotar com
+  // `Parameters<typeof betterAuth>[0]["plugins"]` faz o genérico colapsar para
+  // `never[]`, e os dois `push` passam a ser erro de compilação. Deixar o
+  // TypeScript inferir a união dos dois plugins é o que funciona — medido no
+  // CI, não suposto.
   const colabhdOidc = resolveColabhdOidcSettings();
-  if (colabhdOidc) betterAuthPlugins.push(colabhdOidcPlugin(colabhdOidc));
+
+  const betterAuthPlugins = [
+    ...(resolveWorkspaceHandoffIdentity(config)
+      ? [
+          workspaceLoginHandoffPlugin({
+            db,
+            // Re-resolved per exchange so a hot restart cannot keep validating
+            // against an origin the control plane has since republished.
+            resolveExpectedIdentity: () =>
+              resolveWorkspaceHandoffIdentity(config) ?? {
+                key: null,
+                instanceId: null,
+                executionWorkspaceId: null,
+                companyId: null,
+                origin: null,
+              },
+          }),
+        ]
+      : []),
+    ...(colabhdOidc ? [colabhdOidcPlugin(colabhdOidc)] : []),
+  ];
 
   const authConfig = {
     baseURL: baseUrl,
