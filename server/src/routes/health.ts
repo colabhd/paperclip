@@ -316,7 +316,6 @@ export function healthRoutes(
         commit,
         bootstrapStatus,
         bootstrapInviteActive,
-      ...(sso ? { sso } : {}),
         ...(sso ? { sso } : {}),
         ...(redactedDatabaseBackup ? { databaseBackup: redactedDatabaseBackup } : {}),
         ...(redactedWarnings ? { warnings: redactedWarnings } : {}),
@@ -341,6 +340,7 @@ export function healthRoutes(
       authReady: opts.authReady,
       bootstrapStatus,
       bootstrapInviteActive,
+      ...(sso ? { sso } : {}),
       features: {
         companyDeletionEnabled: opts.companyDeletionEnabled,
       },
